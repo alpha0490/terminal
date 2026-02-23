@@ -14,7 +14,7 @@ ZSHRC_FILE="${HOME}/.zshrc"
 MANAGED_START="# >>> terminal-setup managed block >>>"
 MANAGED_END="# <<< terminal-setup managed block <<<"
 
-# Defaults (your v1 preferences)
+# Defaults
 DEFAULT_USE_STARSHIP="yes"
 DEFAULT_USE_TMUX="yes"
 
@@ -88,8 +88,10 @@ prompt_yes_no() {
     if [[ -z "$ans" ]]; then
       [[ "$default" == "yes" ]] && return 0 || return 1
     fi
+
     local ans_lc
     ans_lc="$(printf '%s' "$ans" | tr '[:upper:]' '[:lower:]')"
+
     case "$ans_lc" in
       y|yes) return 0 ;;
       n|no)  return 1 ;;
@@ -176,10 +178,8 @@ pkg_install() {
 
   log "Installing package: ${pkg}"
   if [[ -n "${SUDO_CMD}" ]]; then
-    # shellcheck disable=SC2086
     ${SUDO_CMD} ${INSTALL_CMD} "$pkg"
   else
-    # shellcheck disable=SC2086
     ${INSTALL_CMD} "$pkg"
   fi
 
@@ -236,17 +236,17 @@ write_manifest() {
   ts="$(timestamp)"
 
   {
-    echo "MANIFEST_VERSION=1"
-    echo "CREATED_AT=${ts}"
-    echo "OS_NAME=${OS_NAME}"
-    echo "PKG_MANAGER=${PKG_MANAGER}"
-    echo "OLD_SHELL=${OLD_SHELL}"
-    echo "CHANGED_DEFAULT_SHELL=${CHANGED_DEFAULT_SHELL}"
-    echo "OHMYZSH_INSTALLED_BY_SCRIPT=${OHMYZSH_INSTALLED_BY_SCRIPT}"
-    echo "PACKAGES_INSTALLED=$(join_by ',' "${PACKAGES_INSTALLED[@]-}")"
-    echo "PLUGINS_CLONED=$(join_by ',' "${PLUGINS_CLONED[@]-}")"
-    echo "FILES_BACKED_UP=$(join_by ';' "${FILES_BACKED_UP[@]-}")"
-    echo "FILES_MODIFIED=$(join_by ',' "${FILES_MODIFIED[@]-}")"
+    printf 'MANIFEST_VERSION=%q\n' "1"
+    printf 'CREATED_AT=%q\n' "${ts}"
+    printf 'OS_NAME=%q\n' "${OS_NAME}"
+    printf 'PKG_MANAGER=%q\n' "${PKG_MANAGER}"
+    printf 'OLD_SHELL=%q\n' "${OLD_SHELL}"
+    printf 'CHANGED_DEFAULT_SHELL=%q\n' "${CHANGED_DEFAULT_SHELL}"
+    printf 'OHMYZSH_INSTALLED_BY_SCRIPT=%q\n' "${OHMYZSH_INSTALLED_BY_SCRIPT}"
+    printf 'PACKAGES_INSTALLED=%q\n' "$(join_by ',' "${PACKAGES_INSTALLED[@]-}")"
+    printf 'PLUGINS_CLONED=%q\n' "$(join_by ',' "${PLUGINS_CLONED[@]-}")"
+    printf 'FILES_BACKED_UP=%q\n' "$(join_by ';' "${FILES_BACKED_UP[@]-}")"
+    printf 'FILES_MODIFIED=%q\n' "$(join_by ',' "${FILES_MODIFIED[@]-}")"
   } > "${MANIFEST_FILE}"
 
   ok "Manifest written: ${MANIFEST_FILE}"
@@ -273,10 +273,7 @@ install_zsh_if_needed() {
   fi
 
   case "${PKG_MANAGER}" in
-    apt)    pkg_install zsh ;;
-    dnf)    pkg_install zsh ;;
-    pacman) pkg_install zsh ;;
-    brew)   pkg_install zsh ;;
+    apt|dnf|pacman|brew) pkg_install zsh ;;
     *) err "Unsupported package manager for zsh install"; exit 1 ;;
   esac
 }
@@ -346,7 +343,6 @@ write_managed_block_to_zshrc() {
   local use_atuin="$8"
 
   touch "${ZSHRC_FILE}"
-
   remove_managed_block_from_zshrc
 
   cat >> "${ZSHRC_FILE}" <<EOF
@@ -361,7 +357,6 @@ export ZSH="\$HOME/.oh-my-zsh"
 
 # Source Oh My Zsh if present
 if [ -s "\$ZSH/oh-my-zsh.sh" ]; then
-  # Keep OMZ plugins minimal; external plugins are sourced below
   plugins=(git)
   source "\$ZSH/oh-my-zsh.sh"
 fi
@@ -459,9 +454,18 @@ EOF
 
   cat >> "${ZSHRC_FILE}" <<'EOF'
 # Helpful aliases (safe defaults)
-alias ls='eza --group-directories-first --icons=auto' 2>/dev/null || alias ls='ls'
-alias ll='eza -la --group-directories-first --icons=auto' 2>/dev/null || alias ll='ls -la'
-alias cat='bat --paging=never' 2>/dev/null || alias cat='cat'
+if command -v eza >/dev/null 2>&1; then
+  alias ls='eza --group-directories-first --icons=auto'
+  alias ll='eza -la --group-directories-first --icons=auto'
+else
+  alias ll='ls -la'
+fi
+
+if command -v bat >/dev/null 2>&1; then
+  alias cat='bat --paging=never'
+elif command -v batcat >/dev/null 2>&1; then
+  alias cat='batcat --paging=never'
+fi
 
 EOF
 
@@ -514,13 +518,11 @@ restore_default_shell_if_changed() {
 # Interactive menu
 # -------------------------
 ask_tool_selection() {
-  # Outputs selections via global variables
   USE_OHMYZSH="yes"
   USE_AUTOCOMPLETE="yes"
   USE_AUTOSUGGESTIONS="yes"
   USE_SYNTAX_HIGHLIGHTING="yes"
 
-  # CLI tools defaults
   USE_FZF="yes"
   USE_ZOXIDE="yes"
   USE_EZA="yes"
@@ -540,7 +542,6 @@ ask_tool_selection() {
   echo
 
   prompt_yes_no "Backup ~/.zshrc before making changes?" "yes" && DO_BACKUP="yes" || DO_BACKUP="no"
-
   prompt_yes_no "Install Oh My Zsh?" "yes" && USE_OHMYZSH="yes" || USE_OHMYZSH="no"
 
   echo
@@ -574,22 +575,22 @@ ask_tool_selection() {
 
   echo
   log "Summary"
-  echo "  Oh My Zsh:              ${USE_OHMYZSH}"
-  echo "  zsh-autocomplete:       ${USE_AUTOCOMPLETE}"
-  echo "  zsh-autosuggestions:    ${USE_AUTOSUGGESTIONS}"
-  echo "  zsh-syntax-highlighting:${USE_SYNTAX_HIGHLIGHTING}"
-  echo "  fzf:                    ${USE_FZF}"
-  echo "  zoxide:                 ${USE_ZOXIDE}"
-  echo "  eza:                    ${USE_EZA}"
-  echo "  bat:                    ${USE_BAT}"
-  echo "  ripgrep:                ${USE_RG}"
-  echo "  fd:                     ${USE_FD}"
-  echo "  jq:                     ${USE_JQ}"
-  echo "  direnv:                 ${USE_DIRENV}"
-  echo "  atuin:                  ${USE_ATUIN}"
-  echo "  Starship:               ${USE_STARSHIP}"
-  echo "  tmux:                   ${USE_TMUX}"
-  echo "  Change shell to zsh:    ${CHANGE_SHELL}"
+  echo "  Oh My Zsh:               ${USE_OHMYZSH}"
+  echo "  zsh-autocomplete:        ${USE_AUTOCOMPLETE}"
+  echo "  zsh-autosuggestions:     ${USE_AUTOSUGGESTIONS}"
+  echo "  zsh-syntax-highlighting: ${USE_SYNTAX_HIGHLIGHTING}"
+  echo "  fzf:                     ${USE_FZF}"
+  echo "  zoxide:                  ${USE_ZOXIDE}"
+  echo "  eza:                     ${USE_EZA}"
+  echo "  bat:                     ${USE_BAT}"
+  echo "  ripgrep:                 ${USE_RG}"
+  echo "  fd:                      ${USE_FD}"
+  echo "  jq:                      ${USE_JQ}"
+  echo "  direnv:                  ${USE_DIRENV}"
+  echo "  atuin:                   ${USE_ATUIN}"
+  echo "  Starship:                ${USE_STARSHIP}"
+  echo "  tmux:                    ${USE_TMUX}"
+  echo "  Change shell to zsh:     ${CHANGE_SHELL}"
   echo
 
   prompt_yes_no "Proceed with installation?" "yes"
@@ -603,7 +604,6 @@ install_flow() {
   detect_package_manager
   ask_tool_selection
 
-  # Always useful dependencies
   pkg_update
   pkg_install git
   pkg_install curl
@@ -619,44 +619,39 @@ install_flow() {
   fi
 
   # Shell plugins
-  if [[ "${USE_AUTOCOMPLETE}" == "yes" ]]; then
-    clone_plugin "zsh-autocomplete" "https://github.com/marlonrichert/zsh-autocomplete.git"
-  fi
-  if [[ "${USE_AUTOSUGGESTIONS}" == "yes" ]]; then
-    clone_plugin "zsh-autosuggestions" "https://github.com/zsh-users/zsh-autosuggestions.git"
-  fi
-  if [[ "${USE_SYNTAX_HIGHLIGHTING}" == "yes" ]]; then
-    clone_plugin "zsh-syntax-highlighting" "https://github.com/zsh-users/zsh-syntax-highlighting.git"
-  fi
+  [[ "${USE_AUTOCOMPLETE}" == "yes" ]] && clone_plugin "zsh-autocomplete" "https://github.com/marlonrichert/zsh-autocomplete.git"
+  [[ "${USE_AUTOSUGGESTIONS}" == "yes" ]] && clone_plugin "zsh-autosuggestions" "https://github.com/zsh-users/zsh-autosuggestions.git"
+  [[ "${USE_SYNTAX_HIGHLIGHTING}" == "yes" ]] && clone_plugin "zsh-syntax-highlighting" "https://github.com/zsh-users/zsh-syntax-highlighting.git"
 
-  # CLI tools (package names vary a bit by OS)
+  # CLI tools
   [[ "${USE_FZF}" == "yes" ]] && pkg_install fzf
   [[ "${USE_ZOXIDE}" == "yes" ]] && pkg_install zoxide
   [[ "${USE_EZA}" == "yes" ]] && pkg_install eza || true
-  [[ "${USE_BAT}" == "yes" ]] && {
-    # Debian/Ubuntu package can be 'bat' or 'batcat' depending on distro version
+
+  if [[ "${USE_BAT}" == "yes" ]]; then
     if [[ "${PKG_MANAGER}" == "apt" ]]; then
       pkg_install bat || pkg_install batcat
     else
       pkg_install bat
     fi
-  }
+  fi
+
   [[ "${USE_RG}" == "yes" ]] && pkg_install ripgrep
-  [[ "${USE_FD}" == "yes" ]] && {
-    # Debian/Ubuntu package name often fd-find
+
+  if [[ "${USE_FD}" == "yes" ]]; then
     if [[ "${PKG_MANAGER}" == "apt" ]]; then
       pkg_install fd-find || pkg_install fd
     else
       pkg_install fd
     fi
-  }
+  fi
+
   [[ "${USE_JQ}" == "yes" ]] && pkg_install jq
   [[ "${USE_DIRENV}" == "yes" ]] && pkg_install direnv
   [[ "${USE_ATUIN}" == "yes" ]] && pkg_install atuin
   [[ "${USE_STARSHIP}" == "yes" ]] && pkg_install starship
   [[ "${USE_TMUX}" == "yes" ]] && pkg_install tmux
 
-  # Write managed block
   write_managed_block_to_zshrc \
     "${USE_AUTOCOMPLETE}" \
     "${USE_AUTOSUGGESTIONS}" \
@@ -667,7 +662,6 @@ install_flow() {
     "${USE_DIRENV}" \
     "${USE_ATUIN}"
 
-  # Optional shell change
   if [[ "${CHANGE_SHELL}" == "yes" ]]; then
     change_default_shell_to_zsh || true
   else
@@ -697,18 +691,24 @@ revert_flow() {
 
   # Parse arrays from manifest strings
   IFS=',' read -r -a manifest_packages <<< "${PACKAGES_INSTALLED:-}"
-  IFS=',' read -r -a manifest_plugins  <<< "${PLUGINS_CLONED:-}"
-  IFS=';' read -r -a manifest_backups  <<< "${FILES_BACKED_UP:-}"
+  IFS=',' read -r -a manifest_plugins <<< "${PLUGINS_CLONED:-}"
+  IFS=';' read -r -a manifest_backups <<< "${FILES_BACKED_UP:-}"
 
   # Remove managed block from .zshrc
   remove_managed_block_from_zshrc
 
   # Restore latest .zshrc backup if available
-  local restored="no"
+  local restored
+  restored="no"
+
+  local pair
+  local src
+  local backup
+
   for pair in "${manifest_backups[@]-}"; do
     [[ -z "${pair}" ]] && continue
-    local src="${pair%%|*}"
-    local backup="${pair#*|}"
+    src="${pair%%|*}"
+    backup="${pair#*|}"
     if [[ "${src}" == "${ZSHRC_FILE}" && -f "${backup}" ]]; then
       cp "${backup}" "${ZSHRC_FILE}"
       ok "Restored ${ZSHRC_FILE} from backup ${backup}"
@@ -716,11 +716,13 @@ revert_flow() {
       break
     fi
   done
+
   if [[ "${restored}" != "yes" ]]; then
     warn "No .zshrc backup found in manifest; left current .zshrc in place (managed block removed)."
   fi
 
   # Remove cloned plugins
+  local p
   for p in "${manifest_plugins[@]-}"; do
     [[ -z "${p}" ]] && continue
     if [[ -d "${p}" ]]; then
@@ -742,13 +744,13 @@ revert_flow() {
 
   # Optional package uninstall
   if prompt_yes_no "Uninstall packages installed by this script?" "no"; then
+    local pkg
     for pkg in "${manifest_packages[@]-}"; do
       [[ -z "${pkg}" ]] && continue
       pkg_remove_if_installed "${pkg}"
     done
   fi
 
-  # Remove manifest
   rm -f "${MANIFEST_FILE}"
   ok "Manifest removed"
 
@@ -790,6 +792,7 @@ status_flow() {
   fi
 
   echo
+  local tool
   for tool in zsh git curl fzf zoxide eza bat batcat rg ripgrep fd fd-find jq direnv atuin starship tmux; do
     if command_exists "${tool}"; then
       printf "  %-12s %s\n" "${tool}" "installed"
