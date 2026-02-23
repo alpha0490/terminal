@@ -88,7 +88,9 @@ prompt_yes_no() {
     if [[ -z "$ans" ]]; then
       [[ "$default" == "yes" ]] && return 0 || return 1
     fi
-    case "${ans,,}" in
+    local ans_lc
+    ans_lc="$(printf '%s' "$ans" | tr '[:upper:]' '[:lower:]')"
+    case "$ans_lc" in
       y|yes) return 0 ;;
       n|no)  return 1 ;;
       *) warn "Please enter y or n." ;;
